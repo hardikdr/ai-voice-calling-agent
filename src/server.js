@@ -10,10 +10,15 @@ import { ValidationError, validateCallInstruction } from './call-instruction.js'
 import { buildAgentPrompt } from './prompt.js';
 import { runDryCall } from './dry-run.js';
 
-export async function buildServer({ config, telephony, dryRunDelayMs = 150 }) {
+export async function buildServer({
+  config,
+  telephony,
+  tunnel,
+  runStore = new RunStore({ storagePath: config.storagePath }),
+  runEvents = new EventEmitter(),
+  dryRunDelayMs = 150,
+}) {
   const app = Fastify({ logger: false });
-  const runStore = new RunStore({ storagePath: config.storagePath });
-  const runEvents = new EventEmitter();
   runEvents.setMaxListeners(100);
   const controllers = new Map();
 
@@ -38,7 +43,8 @@ export async function buildServer({ config, telephony, dryRunDelayMs = 150 }) {
   app.get('/healthz', async () => ({
     ok: true,
     dryRunReady: true,
-    realCallReady: hasCredentials() && Boolean(telephony),
+    mediaTunnelReady: Boolean(tunnel?.ready),
+    realCallReady: hasCredentials() && Boolean(telephony) && Boolean(tunnel?.ready),
   }));
 
   app.get('/api/state', async () => runStore.publicState());
@@ -60,9 +66,9 @@ export async function buildServer({ config, telephony, dryRunDelayMs = 150 }) {
       throw error;
     }
 
-    if (!instruction.dry_run && (!hasCredentials() || !telephony)) {
+    if (!instruction.dry_run && (!hasCredentials() || !telephony || !tunnel?.ready)) {
       return reply.code(503).send({
-        error: 'Real calls require configured OpenAI and Twilio credentials',
+        error: 'Real calls require configured OpenAI and Twilio credentials plus a ready media tunnel',
       });
     }
 
@@ -78,7 +84,8 @@ export async function buildServer({ config, telephony, dryRunDelayMs = 150 }) {
     publish();
 
     const controller = new AbortController();
-    controllers.set(run.id, controller);
+    const resource = { controller, timer: null };
+    controllers.set(run.id, resource);
     const operation = instruction.dry_run
       ? runDryCall({
         runStore,
@@ -89,7 +96,17 @@ export async function buildServer({ config, telephony, dryRunDelayMs = 150 }) {
       })
       : startRealCall({ telephony, runStore, run, publish });
 
-    operation.finally(() => controllers.delete(run.id));
+    if (instruction.dry_run) {
+      operation.finally(() => clearResource(run.id));
+    } else {
+      operation.then((started) => {
+        if (!started) return clearResource(run.id);
+        resource.timer = setTimeout(() => {
+          void stopRealCall(run.id, 'Maximum call duration reached');
+        }, config.maxCallSeconds * 1_000);
+        resource.timer.unref?.();
+      });
+    }
     return reply.code(202).send({ runId: run.id });
   });
 
@@ -100,10 +117,13 @@ export async function buildServer({ config, telephony, dryRunDelayMs = 150 }) {
       return reply.code(409).send({ error: 'Run is already finished' });
     }
 
-    controllers.get(run.id)?.abort();
-    if (!run.instruction.dry_run && telephony) await telephony.hangup(run);
-    await runStore.cancel(run.id, 'Cancelled by user');
-    publish();
+    controllers.get(run.id)?.controller.abort();
+    if (run.instruction.dry_run) {
+      await runStore.cancel(run.id, 'Cancelled by user');
+      publish();
+    } else {
+      await stopRealCall(run.id, 'Cancelled by user');
+    }
     return reply.code(202).send({ runId: run.id, status: 'cancelled' });
   });
 
@@ -124,8 +144,39 @@ export async function buildServer({ config, telephony, dryRunDelayMs = 150 }) {
     });
   });
 
+  const terminalStatuses = new Set(['completed', 'failed', 'cancelled']);
+  const clearResource = (runId) => {
+    const resource = controllers.get(runId);
+    if (resource?.timer) clearTimeout(resource.timer);
+    controllers.delete(runId);
+  };
+  const clearFinishedResources = () => {
+    for (const runId of controllers.keys()) {
+      if (terminalStatuses.has(runStore.getRun(runId)?.status)) clearResource(runId);
+    }
+  };
+  runEvents.on('state', clearFinishedResources);
+
+  async function stopRealCall(runId, reason) {
+    const run = runStore.getRun(runId);
+    if (!run || terminalStatuses.has(run.status)) return clearResource(runId);
+    await runStore.cancel(runId, reason);
+    publish();
+    try {
+      await telephony?.hangup(run);
+    } finally {
+      clearResource(runId);
+    }
+  }
+
   app.addHook('onClose', async () => {
-    for (const controller of controllers.values()) controller.abort();
+    runEvents.off('state', clearFinishedResources);
+    for (const { controller, timer } of controllers.values()) {
+      controller.abort();
+      if (timer) clearTimeout(timer);
+    }
+    const active = runStore.publicState().activeRun;
+    if (active && !active.instruction.dry_run) await stopRealCall(active.id, 'Service shutting down');
     controllers.clear();
   });
 
@@ -143,6 +194,7 @@ async function startRealCall({ telephony, runStore, run, publish }) {
     run.providerCallId = result.providerCallId;
     run.updatedAt = new Date().toISOString();
     publish();
+    return true;
   } catch (error) {
     await runStore.finish(run.id, {
       status: 'failed',
@@ -150,5 +202,6 @@ async function startRealCall({ telephony, runStore, run, publish }) {
       error: error.message,
     });
     publish();
+    return false;
   }
 }

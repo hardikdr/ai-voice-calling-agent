@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { buildServer } from '../src/server.js';
+import { RunStore } from '../src/run-store.js';
 
 const validDryInstruction = {
   phone_number: '+4930123456',
@@ -22,6 +23,7 @@ const validDryInstruction = {
 
 async function withApp(run, options = {}) {
   const storagePath = await mkdtemp(join(tmpdir(), 'calling-agent-server-'));
+  const runStore = options.runStore ?? new RunStore({ storagePath });
   const app = await buildServer({
     config: {
       storagePath,
@@ -34,6 +36,8 @@ async function withApp(run, options = {}) {
     },
     dryRunDelayMs: options.dryRunDelayMs ?? 1,
     telephony: options.telephony,
+    tunnel: options.tunnel,
+    runStore,
   });
   try {
     await run(app);
@@ -125,10 +129,58 @@ test('reports process readiness without requiring real-call credentials', async 
     assert.deepEqual(response.json(), {
       ok: true,
       dryRunReady: true,
+      mediaTunnelReady: false,
       realCallReady: false,
     });
 
     const state = await app.inject({ method: 'GET', url: '/api/state' });
     assert.deepEqual(state.json(), { activeRun: null, latestRun: null });
   });
+});
+
+test('uses injected shared state and reports real-call readiness only with a tunnel', async () => {
+  const storagePath = await mkdtemp(join(tmpdir(), 'calling-agent-shared-'));
+  const runStore = new RunStore({ storagePath, idFactory: () => 'shared-run' });
+  const starts = [];
+  const telephony = {
+    async start(input) {
+      starts.push(input);
+      return { providerCallId: 'CA123' };
+    },
+    async hangup() {},
+  };
+  try {
+    await withApp(async (app) => {
+      assert.equal(app.runStore, runStore);
+      const health = await app.inject({ method: 'GET', url: '/healthz' });
+      assert.deepEqual(health.json(), {
+        ok: true,
+        dryRunReady: true,
+        mediaTunnelReady: true,
+        realCallReady: true,
+      });
+
+      const started = await app.inject({
+        method: 'POST',
+        url: '/api/calls',
+        payload: { ...validDryInstruction, dry_run: false },
+      });
+      assert.equal(started.statusCode, 202);
+      await waitFor(() => starts.length === 1);
+      assert.equal(starts[0].run.id, 'shared-run');
+      assert.equal(runStore.getRun('shared-run').providerCallId, 'CA123');
+    }, {
+      runStore,
+      telephony,
+      tunnel: { ready: true },
+      config: {
+        openaiApiKey: 'openai-key',
+        twilioAccountSid: 'AC123',
+        twilioAuthToken: 'twilio-token',
+        twilioFromNumber: '+4930999999',
+      },
+    });
+  } finally {
+    await rm(storagePath, { recursive: true, force: true });
+  }
 });
