@@ -1,0 +1,17 @@
+{
+  "phone_number": "+4930123456",
+  "language": "de",
+  "my_name": "Example User",
+  "objective": "Ask what the opening hours are tomorrow.",
+  "allowed_times": [],
+  "forbidden_times": [],
+  "facts_agent_may_disclose": [],
+  "actions_agent_may_take": [
+    "ask questions and report the answer"
+  ],
+  "actions_requiring_confirmation": [
+    "agree to fees",
+    "make an appointment"
+  ],
+  "dry_run": true
+}

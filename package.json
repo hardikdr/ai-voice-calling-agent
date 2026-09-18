@@ -1,0 +1,25 @@
+{
+  "name": "calling-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "call": "node src/cli.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@fastify/static": "^10.1.4",
+    "@fastify/websocket": "^11.0.0",
+    "@openai/agents": "^0.3.0",
+    "@openai/agents-extensions": "^0.3.0",
+    "dotenv": "^17.0.0",
+    "fastify": "^5.0.0",
+    "twilio": "^5.0.0",
+    "ws": "^8.0.0",
+    "zod": "^4.0.0"
+  }
+}
