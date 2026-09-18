@@ -1,6 +1,9 @@
 import { EventEmitter } from 'node:events';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import Fastify from 'fastify';
+import fastifyStatic from '@fastify/static';
 
 import { ActiveCallError, RunStore } from './run-store.js';
 import { ValidationError, validateCallInstruction } from './call-instruction.js';
@@ -16,6 +19,13 @@ export async function buildServer({ config, telephony, dryRunDelayMs = 150 }) {
 
   app.runStore = runStore;
   app.runEvents = runEvents;
+
+  const publicRoot = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
+  await app.register(fastifyStatic, {
+    root: publicRoot,
+    wildcard: false,
+    list: false,
+  });
 
   const publish = () => runEvents.emit('state', runStore.publicState());
   const hasCredentials = () => Boolean(
