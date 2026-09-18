@@ -1,0 +1,109 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: calling-agent
+  namespace: calling-agent
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: calling-agent
+  template:
+    metadata:
+      labels:
+        app: calling-agent
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: calling-agent
+          image: calling-agent:dev
+          imagePullPolicy: Never
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - name: ui
+              containerPort: 8080
+            - name: media
+              containerPort: 5050
+          env:
+            - name: UI_PORT
+              value: "8080"
+            - name: MEDIA_PORT
+              value: "5050"
+            - name: RUN_STORAGE_PATH
+              value: /data/runs
+            - name: OPENAI_REALTIME_MODEL
+              value: gpt-realtime-2.1-mini
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: calling-agent-secrets
+                  key: OPENAI_API_KEY
+                  optional: true
+            - name: TWILIO_ACCOUNT_SID
+              valueFrom:
+                secretKeyRef:
+                  name: calling-agent-secrets
+                  key: TWILIO_ACCOUNT_SID
+                  optional: true
+            - name: TWILIO_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: calling-agent-secrets
+                  key: TWILIO_AUTH_TOKEN
+                  optional: true
+            - name: TWILIO_FROM_NUMBER
+              valueFrom:
+                secretKeyRef:
+                  name: calling-agent-secrets
+                  key: TWILIO_FROM_NUMBER
+                  optional: true
+            - name: PUBLIC_MEDIA_URL
+              valueFrom:
+                secretKeyRef:
+                  name: calling-agent-secrets
+                  key: PUBLIC_MEDIA_URL
+                  optional: true
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: ui
+            initialDelaySeconds: 2
+            periodSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: ui
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - name: runs
+              mountPath: /data/runs
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: runs
+          persistentVolumeClaim:
+            claimName: calling-agent-runs
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi

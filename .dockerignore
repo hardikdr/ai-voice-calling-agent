@@ -1,0 +1,11 @@
+.git
+.worktrees
+.env
+node_modules
+test/
+docs/
+deploy/
+scripts/
+calls/
+npm-debug.log*
+data/

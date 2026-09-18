@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: calling-agent-runs
+spec:
+  capacity:
+    storage: 128Mi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: calling-agent-local
+  hostPath:
+    path: /var/local/calling-agent-runs
+    type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: calling-agent-runs
+  namespace: calling-agent
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: calling-agent-local
+  resources:
+    requests:
+      storage: 128Mi
