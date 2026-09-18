@@ -1,0 +1,6 @@
+.worktrees/
+.env
+node_modules/
+runs/
+coverage/
+.DS_Store
