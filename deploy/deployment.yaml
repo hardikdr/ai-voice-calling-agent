@@ -22,6 +22,29 @@ spec:
         fsGroup: 10001
         seccompProfile:
           type: RuntimeDefault
+      initContainers:
+        - name: prepare-ca-bundle
+          image: calling-agent:dev
+          imagePullPolicy: Never
+          command: ["/bin/sh", "-c"]
+          args:
+            - >-
+              cp /etc/ssl/certs/ca-certificates.crt /combined/ca-certificates.crt;
+              if [ -f /custom/custom-ca.pem ]; then
+                cat /custom/custom-ca.pem >> /combined/ca-certificates.crt;
+              fi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: combined-ca
+              mountPath: /combined
+            - name: custom-ca
+              mountPath: /custom
+              readOnly: true
       containers:
         - name: calling-agent
           image: calling-agent:dev
@@ -44,6 +67,10 @@ spec:
               value: "5050"
             - name: RUN_STORAGE_PATH
               value: /data/runs
+            - name: SSL_CERT_FILE
+              value: /etc/ssl/combined/ca-certificates.crt
+            - name: NODE_EXTRA_CA_CERTS
+              value: /etc/ssl/combined/ca-certificates.crt
             - name: OPENAI_REALTIME_MODEL
               value: gpt-realtime-2.1-mini
             - name: OPENAI_API_KEY
@@ -100,6 +127,9 @@ spec:
               mountPath: /data/runs
             - name: tmp
               mountPath: /tmp
+            - name: combined-ca
+              mountPath: /etc/ssl/combined
+              readOnly: true
       volumes:
         - name: runs
           persistentVolumeClaim:
@@ -107,3 +137,10 @@ spec:
         - name: tmp
           emptyDir:
             sizeLimit: 64Mi
+        - name: combined-ca
+          emptyDir:
+            sizeLimit: 4Mi
+        - name: custom-ca
+          secret:
+            secretName: calling-agent-custom-ca
+            optional: true

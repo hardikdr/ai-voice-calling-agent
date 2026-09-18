@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 
-const quickTunnelPattern = /https:\/\/[a-z0-9-]+\.trycloudflare\.com\b/i;
+const quickTunnelPattern = /https:\/\/[a-z0-9-]+\.trycloudflare\.com\b/gi;
 
 export class TunnelManager {
   #mediaPort;
@@ -47,6 +47,7 @@ export class TunnelManager {
     try {
       this.#url = await new Promise((resolve, reject) => {
         let settled = false;
+        let recentOutput = '';
         const finish = (action, value) => {
           if (settled) return;
           settled = true;
@@ -54,8 +55,15 @@ export class TunnelManager {
           action(value);
         };
         const consume = (chunk) => {
-          const match = String(chunk).match(quickTunnelPattern);
-          if (match) finish(resolve, normalizeHttpsUrl(match[0]));
+          const text = String(chunk);
+          recentOutput = `${recentOutput}${text}`.slice(-2_000);
+          for (const match of text.matchAll(quickTunnelPattern)) {
+            const candidate = normalizeHttpsUrl(match[0]);
+            if (candidate.hostname !== 'api.trycloudflare.com') {
+              finish(resolve, candidate);
+              return;
+            }
+          }
         };
         const timer = setTimeout(() => {
           finish(reject, new Error('Timed out waiting for the Cloudflare tunnel URL'));
@@ -66,7 +74,9 @@ export class TunnelManager {
         child.stderr?.on('data', consume);
         child.once('error', (error) => finish(reject, error));
         child.once('exit', (code) => {
-          finish(reject, new Error(`cloudflared exited before publishing a URL (code ${code})`));
+          const detail = recentOutput.trim();
+          const suffix = detail ? `: ${detail}` : '';
+          finish(reject, new Error(`cloudflared exited before publishing a URL (code ${code})${suffix}`));
         });
       });
       return this.#url;

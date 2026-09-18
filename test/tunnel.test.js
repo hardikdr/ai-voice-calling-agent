@@ -26,6 +26,11 @@ test('extracts a quick-tunnel URL and creates a tokenized websocket URL', async 
   });
 
   const started = manager.start();
+  let settled = false;
+  void started.then(() => { settled = true; });
+  child.stderr.write('INF Requesting new quick Tunnel on https://api.trycloudflare.com\n');
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(settled, false);
   child.stderr.write('INF +https://violet-lake.trycloudflare.com ready\n');
   assert.equal((await started).href, 'https://violet-lake.trycloudflare.com/');
   assert.equal(
@@ -61,8 +66,9 @@ test('rejects and cleans up when cloudflared exits before publishing a URL', asy
   const manager = new TunnelManager({ mediaPort: 5050, spawnProcess: () => child, timeoutMs: 100 });
 
   const started = manager.start();
+  child.stderr.write('failed to request quick Tunnel: unable to get local issuer certificate\n');
   child.emit('exit', 1, null);
-  await assert.rejects(started, /exited before publishing/);
+  await assert.rejects(started, /exited before publishing.*unable to get local issuer certificate/s);
   assert.equal(manager.ready, false);
 });
 

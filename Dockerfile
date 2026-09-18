@@ -1,4 +1,4 @@
-FROM cloudflare/cloudflared:2025.8.1 AS cloudflared
+FROM cloudflare/cloudflared:2026.9.1 AS cloudflared
 
 FROM node:22-bookworm-slim
 

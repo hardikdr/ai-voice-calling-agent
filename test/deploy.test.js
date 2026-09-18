@@ -24,6 +24,9 @@ test('deployment is non-root, probed, secret-backed, and persists run artifacts'
   assert.match(deployment, /path:\s*\/healthz/);
   assert.match(deployment, /mountPath:\s*\/data\/runs/);
   assert.match(deployment, /secretKeyRef:[\s\S]*name:\s*calling-agent-secrets/);
+  assert.match(deployment, /initContainers:[\s\S]*ca-certificates\.crt/);
+  assert.match(deployment, /name:\s*SSL_CERT_FILE[\s\S]*\/etc\/ssl\/combined\/ca-certificates\.crt/);
+  assert.match(deployment, /secretName:\s*calling-agent-custom-ca[\s\S]*optional:\s*true/);
   assert.doesNotMatch(deployment, /sk-[A-Za-z0-9]|AC[a-fA-F0-9]{20}/);
 });
 
@@ -44,6 +47,9 @@ test('workflow scripts are valid shell and scope destructive teardown to the exa
   assert.match(up, /CLUSTER_NAME="calling-agent"/);
   assert.match(up, /IMAGE="calling-agent:dev"/);
   assert.match(up, /kind load docker-image "\$IMAGE" --name "\$CLUSTER_NAME"/);
+  assert.match(up, /rollout restart deployment\/calling-agent/);
+  assert.match(up, /CUSTOM_CA_CERT_PATH/);
+  assert.match(up, /calling-agent-custom-ca/);
   assert.match(up, /kubectl[^\n]*rollout status deployment\/calling-agent/);
   assert.doesNotMatch(up, /set -x/);
   assert.match(down, /kind delete cluster --name "\$CLUSTER_NAME"/);
@@ -53,6 +59,7 @@ test('container excludes local secrets and runs as an unprivileged application u
   const dockerfile = await read('Dockerfile');
   const dockerignore = await read('.dockerignore');
   assert.match(dockerfile, /FROM node:22-bookworm-slim/);
+  assert.match(dockerfile, /FROM cloudflare\/cloudflared:2026\.9\.1/);
   assert.match(dockerfile, /COPY --from=cloudflared/);
   assert.match(dockerfile, /USER app/);
   assert.match(dockerfile, /EXPOSE 8080 5050/);
