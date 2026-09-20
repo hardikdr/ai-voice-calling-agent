@@ -3,13 +3,16 @@ import { EventEmitter } from 'node:events';
 import { RunStore } from './run-store.js';
 import { TunnelManager } from './tunnel.js';
 import { TwilioTelephony } from './telephony.js';
+import { TelnyxTelephony } from './telnyx-telephony.js';
 import { buildMediaServer } from './media-server.js';
 import { buildServer } from './server.js';
 
 export async function buildRuntime({
   config,
   createTunnel = (options) => new TunnelManager(options),
-  createTelephony = (options) => new TwilioTelephony(options),
+  createTelephony = (options) => options.provider === 'telnyx'
+    ? new TelnyxTelephony(options)
+    : new TwilioTelephony(options),
   createMediaServer = buildMediaServer,
   createControlServer = buildServer,
 }) {
@@ -23,9 +26,14 @@ export async function buildRuntime({
   });
   const publish = () => runEvents.emit('state', runStore.publicState());
   const telephony = createTelephony({
+    provider: config.telephonyProvider,
     accountSid: config.twilioAccountSid,
     authToken: config.twilioAuthToken,
-    fromNumber: config.twilioFromNumber,
+    apiKey: config.telnyxApiKey,
+    connectionId: config.telnyxConnectionId,
+    fromNumber: config.telephonyProvider === 'telnyx'
+      ? config.telnyxFromNumber
+      : config.twilioFromNumber,
     tunnel,
     mediaSessions,
   });

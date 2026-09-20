@@ -68,3 +68,24 @@ test('keeps dry-run control available when the quick tunnel cannot start', async
   assert.deepEqual(events, ['media:listen', 'control:listen']);
   await runtime.stop();
 });
+
+test('selects Telnyx credentials for the telephony adapter', async () => {
+  let received;
+  const app = { async listen() {}, async close() {} };
+  const runtime = await buildRuntime({
+    config: {
+      storagePath: '/tmp/calling-agent-runtime-test', uiPort: 8080, mediaPort: 5050,
+      maxCallSeconds: 600, openaiModel: 'model', telephonyProvider: 'telnyx',
+      telnyxApiKey: 'key', telnyxConnectionId: 'connection', telnyxFromNumber: '+4915112345678',
+    },
+    createTunnel: () => ({ ready: true, async start() { return new URL('https://calls.example'); }, async stop() {} }),
+    createTelephony: (options) => { received = options; return {}; },
+    createMediaServer: async () => app,
+    createControlServer: async () => app,
+  });
+  assert.equal(received.provider, 'telnyx');
+  assert.equal(received.apiKey, 'key');
+  assert.equal(received.connectionId, 'connection');
+  await runtime.start();
+  await runtime.stop();
+});

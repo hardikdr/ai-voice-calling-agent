@@ -25,8 +25,12 @@ test('deployment is non-root, probed, secret-backed, and persists run artifacts'
   assert.match(deployment, /mountPath:\s*\/data\/runs/);
   assert.match(deployment, /secretKeyRef:[\s\S]*name:\s*calling-agent-secrets/);
   assert.match(deployment, /initContainers:[\s\S]*ca-certificates\.crt/);
+  assert.match(deployment, /name:\s*prepare-run-storage[\s\S]*chown -R 10001:10001 \/data\/runs/);
   assert.match(deployment, /name:\s*SSL_CERT_FILE[\s\S]*\/etc\/ssl\/combined\/ca-certificates\.crt/);
   assert.match(deployment, /secretName:\s*calling-agent-custom-ca[\s\S]*optional:\s*true/);
+  for (const name of ['TELEPHONY_PROVIDER', 'TELNYX_API_KEY', 'TELNYX_CONNECTION_ID', 'TELNYX_FROM_NUMBER', 'TELNYX_PUBLIC_KEY']) {
+    assert.match(deployment, new RegExp(`name:\\s*${name}`));
+  }
   assert.doesNotMatch(deployment, /sk-[A-Za-z0-9]|AC[a-fA-F0-9]{20}/);
 });
 

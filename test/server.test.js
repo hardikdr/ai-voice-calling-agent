@@ -184,3 +184,18 @@ test('uses injected shared state and reports real-call readiness only with a tun
     await rm(storagePath, { recursive: true, force: true });
   }
 });
+
+test('reports Telnyx real-call readiness with complete provider credentials', async () => {
+  await withApp(async (app) => {
+    const health = await app.inject({ method: 'GET', url: '/healthz' });
+    assert.equal(health.json().realCallReady, true);
+  }, {
+    telephony: { async start() {}, async hangup() {} },
+    tunnel: { ready: true },
+    config: {
+      telephonyProvider: 'telnyx', openaiApiKey: 'openai-key',
+      telnyxApiKey: 'telnyx-key', telnyxConnectionId: 'connection',
+      telnyxFromNumber: '+4915112345678', telnyxPublicKey: 'public-key',
+    },
+  });
+});

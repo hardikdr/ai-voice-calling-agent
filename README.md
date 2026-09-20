@@ -15,6 +15,9 @@ The default is a deterministic dry run. No audio is recorded or stored.
 
 ## Architecture
 
+See [the detailed architecture and call-flow diagrams](./docs/ARCHITECTURE.md)
+and [the verified local configuration snapshot](./docs/WORKING_CONFIGURATION.md).
+
 ```text
 Browser on localhost:8080
         |

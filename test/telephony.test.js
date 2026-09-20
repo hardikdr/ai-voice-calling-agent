@@ -58,6 +58,7 @@ test('creates a non-recorded outbound call with tokenized stream and status URLs
   assert.match(twiml, /^<\?xml[^>]+><Response><Connect><Stream url="wss:\/\/media\.example\.test\/media-stream\/media-token"\s*\/><\/Connect><\/Response>$/);
   assert.equal('record' in client.calls.created[0], false);
   assert.deepEqual(mediaSessions.get('media-token'), {
+    provider: 'twilio',
     runId: 'run-1',
     prompt: 'guarded prompt',
   });

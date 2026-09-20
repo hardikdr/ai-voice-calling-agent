@@ -29,6 +29,10 @@ export class TwilioTelephony {
     this.#tokenFactory = tokenFactory;
   }
 
+  get ready() {
+    return Boolean(this.#accountSid && this.#authToken && this.#fromNumber && this.#tunnel?.ready);
+  }
+
   async start({ run, prompt }) {
     this.#assertReady();
     const token = this.#tokenFactory();
@@ -36,7 +40,7 @@ export class TwilioTelephony {
     const statusCallback = this.#tunnel.callbackUrl(`twilio/status/${token}`);
     const response = new twilio.twiml.VoiceResponse();
     response.connect().stream({ url: streamUrl });
-    this.#mediaSessions.set(token, { runId: run.id, prompt });
+    this.#mediaSessions.set(token, { provider: 'twilio', runId: run.id, prompt });
 
     try {
       const call = await this.#twilioClient().calls.create({

@@ -33,12 +33,18 @@ export async function buildServer({
   });
 
   const publish = () => runEvents.emit('state', runStore.publicState());
-  const hasCredentials = () => Boolean(
-    config.openaiApiKey
-      && config.twilioAccountSid
-      && config.twilioAuthToken
-      && config.twilioFromNumber,
-  );
+  const hasCredentials = () => {
+    if (!config.openaiApiKey) return false;
+    if (config.telephonyProvider === 'telnyx') {
+      return Boolean(
+        config.telnyxApiKey
+          && config.telnyxConnectionId
+          && config.telnyxFromNumber
+          && config.telnyxPublicKey,
+      );
+    }
+    return Boolean(config.twilioAccountSid && config.twilioAuthToken && config.twilioFromNumber);
+  };
 
   app.get('/healthz', async () => ({
     ok: true,
@@ -68,7 +74,7 @@ export async function buildServer({
 
     if (!instruction.dry_run && (!hasCredentials() || !telephony || !tunnel?.ready)) {
       return reply.code(503).send({
-        error: 'Real calls require configured OpenAI and Twilio credentials plus a ready media tunnel',
+        error: `Real calls require configured OpenAI and ${config.telephonyProvider ?? 'twilio'} credentials plus a ready media tunnel`,
       });
     }
 

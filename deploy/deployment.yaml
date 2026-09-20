@@ -23,6 +23,26 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       initContainers:
+        - name: prepare-run-storage
+          image: calling-agent:dev
+          imagePullPolicy: Never
+          command: ["/bin/sh", "-c"]
+          args:
+            - chown -R 10001:10001 /data/runs && chmod 2770 /data/runs
+          securityContext:
+            runAsNonRoot: false
+            runAsUser: 0
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+                - FOWNER
+          volumeMounts:
+            - name: runs
+              mountPath: /data/runs
         - name: prepare-ca-bundle
           image: calling-agent:dev
           imagePullPolicy: Never
@@ -78,6 +98,36 @@ spec:
                 secretKeyRef:
                   name: calling-agent-secrets
                   key: OPENAI_API_KEY
+                  optional: true
+            - name: TELEPHONY_PROVIDER
+              valueFrom:
+                secretKeyRef:
+                  name: calling-agent-secrets
+                  key: TELEPHONY_PROVIDER
+                  optional: true
+            - name: TELNYX_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: calling-agent-secrets
+                  key: TELNYX_API_KEY
+                  optional: true
+            - name: TELNYX_CONNECTION_ID
+              valueFrom:
+                secretKeyRef:
+                  name: calling-agent-secrets
+                  key: TELNYX_CONNECTION_ID
+                  optional: true
+            - name: TELNYX_FROM_NUMBER
+              valueFrom:
+                secretKeyRef:
+                  name: calling-agent-secrets
+                  key: TELNYX_FROM_NUMBER
+                  optional: true
+            - name: TELNYX_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: calling-agent-secrets
+                  key: TELNYX_PUBLIC_KEY
                   optional: true
             - name: TWILIO_ACCOUNT_SID
               valueFrom:
